@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <signal.h>
+#include <getopt.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -37,9 +38,11 @@
 
 static struct ev_loop *loop;
 static int pagesize;
-static int ring_frames;
 
-
+static const char *interface = NULL;
+static int packet_ring_frames= 1024;
+static int packet_buffer_frames = 1024;
+static const char *ctl_path = "/tmp/rpcapng.ctl";
 
 struct rxring {
   /* initialized during startup */
@@ -57,7 +60,6 @@ static void rxring_process(struct ev_loop *l, ev_io *io, int revents);
 static struct rxring rx;
 
 
-#define CTL_PATH	"/tmp/rpcapng.ctl"
 static int ctl_fd;
 static ev_io ctl_ready;
 
@@ -137,10 +139,10 @@ static void rxring_init(struct rxring *r, const char *iface) {
   check(ret == 0);
 
 
-  tp.tp_block_size = ring_frames * pagesize;
+  tp.tp_block_size = packet_ring_frames * pagesize;
   tp.tp_block_nr = 1;
   tp.tp_frame_size = pagesize;
-  tp.tp_frame_nr = ring_frames;
+  tp.tp_frame_nr = packet_ring_frames;
 
   ret = setsockopt(r->fd, SOL_PACKET, PACKET_RX_RING, (void*) &tp, sizeof(tp));
   check(ret == 0);
@@ -158,7 +160,7 @@ static void rxring_init(struct rxring *r, const char *iface) {
 }
 
 static void rxring_fini(struct rxring *r) {
-  munmap(r->ring, ring_frames * pagesize);
+  munmap(r->ring, packet_ring_frames * pagesize);
   close(r->fd);
 }
 
@@ -188,7 +190,7 @@ static void rxring_process(struct ev_loop *l, ev_io *io, int revents) {
 
     // last, release frame to kernel
     header->tp_status = TP_STATUS_KERNEL;
-    r->offset = (r->offset + 1) & (ring_frames - 1);
+    r->offset = (r->offset + 1) & (packet_ring_frames - 1);
   }
 }
 
@@ -236,22 +238,53 @@ static void ctl_process(struct ev_loop *l, ev_io *w, int revents) {
   }   
 }
 
+static void usage(const char *arg0) {
+  fprintf(stderr, "usage: %s -i <interface> [-r rx_ring_size] [-R roll_ring_size] [-c ctl_path]\n"
+    "  -i <interface>: the network interface to capture from\n"
+    "  -r rx_ring_size: the number of slots in the PF_PACKET rx ring used to pull packets from NIC\n"
+    "  -R roll_ring_size: the number of slots in the network blackbox\n"
+    "  -c ctl_path: Unix path of control socket\n", arg0);
+
+  exit(1);
+}
+
 int main(int argc, char **argv) {
   int ret;
   ev_signal signal_watcher;
+  int c;
 
   loop = EV_DEFAULT;
   pagesize = getpagesize();
-  ring_frames = 1024;
+
+  while ((c = getopt(argc, argv, "i:c:r:R:")) != -1) {
+    switch (c) {
+    case 'i':
+      interface = optarg;
+      break;
+    case 'c':
+      ctl_path = optarg;
+      break;
+    case 'r':
+      packet_ring_frames = atoi(optarg);
+      break;
+    case 'R':
+      packet_buffer_frames = atoi(optarg);
+      break;
+    }
+  }
+
+  if (!interface || ((packet_ring_frames & (packet_ring_frames-1)) != 0)) {
+    usage(argv[0]);
+  }
 
   ev_signal_init(&signal_watcher, sig_process, SIGINT);
   ev_signal_start(loop, &signal_watcher);
 
 
-  ret = mkfifo(CTL_PATH, 0666);
+  ret = mkfifo(ctl_path, 0666);
   check(ret != -1);
 
-  ctl_fd = open(CTL_PATH, O_RDONLY);
+  ctl_fd = open(ctl_path, O_RDONLY);
   check(ctl_fd != -1);
 
   ev_io_init(&ctl_ready, ctl_process, ctl_fd, EV_READ);
@@ -259,7 +292,7 @@ int main(int argc, char **argv) {
 
 
   packet_ring_init(&pr, 1024);
-  rxring_init(&rx, "ens33");
+  rxring_init(&rx, "ens3");
 
 
   ev_run(loop, 0);
