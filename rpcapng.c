@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <getopt.h>
+#include <sys/un.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -201,11 +202,17 @@ static void sig_process(struct ev_loop *l, ev_signal *s, int revents) {
 
 static void ctl_process(struct ev_loop *l, ev_io *w, int revents) {
   int ret;
+  struct sockaddr_un addr;
+  socklen_t addr_size = sizeof(addr);
   char buffer[256+1];
   FILE *f;
   struct packet *p;
 
-  ret = read(ctl_fd, buffer, 256);
+
+  memset(&addr, 0, sizeof(addr));
+  addr.sun_family = AF_UNIX;
+
+  ret = recvfrom(ctl_fd, buffer, 256, 0, (struct sockaddr *) &addr, &addr_size);
   check(ret != -1);
   check(ret < sizeof(buffer));
   buffer[ret] = 0;
@@ -235,7 +242,10 @@ static void ctl_process(struct ev_loop *l, ev_io *w, int revents) {
     TAILQ_FOREACH(p, &pr.avail_packets, _next) {
       packet_ring_put(&pr, p);
     }
-  }   
+  }
+
+  addr_size = sizeof(addr);
+  sendto(ctl_fd, "ok\n", 3, 0, (const struct sockaddr *) &addr, addr_size);
 }
 
 static void usage(const char *arg0) {
@@ -252,6 +262,7 @@ int main(int argc, char **argv) {
   int ret;
   ev_signal signal_watcher;
   int c;
+  struct sockaddr_un addr;
 
   loop = EV_DEFAULT;
   pagesize = getpagesize();
@@ -281,11 +292,15 @@ int main(int argc, char **argv) {
   ev_signal_start(loop, &signal_watcher);
 
 
-  ret = mkfifo(ctl_path, 0666);
-  check(ret != -1);
+  memset(&addr, 0, sizeof(addr));
+  addr.sun_family = AF_UNIX;
+  strncpy(addr.sun_path, ctl_path, sizeof(addr.sun_path)-1);
 
-  ctl_fd = open(ctl_path, O_RDONLY);
+  ctl_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
   check(ctl_fd != -1);
+
+  ret = bind(ctl_fd, (struct sockaddr *) &addr, sizeof(addr));
+  check(ret == 0);
 
   ev_io_init(&ctl_ready, ctl_process, ctl_fd, EV_READ);
   ev_io_start(loop, &ctl_ready);
@@ -301,6 +316,10 @@ int main(int argc, char **argv) {
   rxring_fini(&rx);
   packet_ring_fini(&pr);
 
+  ev_io_stop(loop, &ctl_ready);
+
+  close(ctl_fd);
+  unlink(ctl_path);
 
   return 0;
 }
