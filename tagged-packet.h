@@ -17,7 +17,6 @@ void tag_put(struct tag *);
 void tag_append(const char *desc);
 
 
-
 struct packet {
   TAILQ_ENTRY(packet) _next;
 
@@ -46,5 +45,6 @@ void packet_ring_init(struct packet_ring *, int);
 void packet_ring_fini(struct packet_ring *);
 
 struct packet *packet_ring_get(struct packet_ring *);
+void packet_ring_put(struct packet_ring *, struct packet *);
 
 #endif /* TAGGED_PACKET_H */

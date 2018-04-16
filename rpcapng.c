@@ -24,6 +24,7 @@
 #include <ev.h>
 
 #include "tagged-packet.h"
+#include "pcapng.h"
 
 #define check(what)	do {				\
   if (!(what)) {					\
@@ -199,6 +200,8 @@ static void sig_process(struct ev_loop *l, ev_signal *s, int revents) {
 static void ctl_process(struct ev_loop *l, ev_io *w, int revents) {
   int ret;
   char buffer[256+1];
+  FILE *f;
+  struct packet *p;
 
   ret = read(ctl_fd, buffer, 256);
   check(ret != -1);
@@ -214,8 +217,23 @@ static void ctl_process(struct ev_loop *l, ev_io *w, int revents) {
   else if (buffer[0] == 'd') {
     check(ret > 1);
 
-    printf("dump to %s\n", &buffer[1]);
+    f = fopen(&buffer[1], "wb");
+    check(f != NULL);
+
+    pcapng_write_shblock(f);
+    pcapng_write_idblock(f);
+
+    TAILQ_FOREACH(p, &pr.avail_packets, _next) {
+      pcapng_write_epblock(f, p);
+    }
+
+    fclose(f);
   }
+  else if (buffer[0] == 'c') {
+    TAILQ_FOREACH(p, &pr.avail_packets, _next) {
+      packet_ring_put(&pr, p);
+    }
+  }   
 }
 
 int main(int argc, char **argv) {
@@ -240,7 +258,7 @@ int main(int argc, char **argv) {
   ev_io_start(loop, &ctl_ready);
 
 
-  packet_ring_init(&pr, 10000);
+  packet_ring_init(&pr, 1024);
   rxring_init(&rx, "ens33");
 
 

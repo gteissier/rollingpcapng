@@ -18,7 +18,7 @@ static struct tag_list tags = TAILQ_HEAD_INITIALIZER(tags);
 
 struct tag *tag_get() {
   struct tag *t;
-  t = TAILQ_FIRST(&tags);
+  t = TAILQ_LAST(&tags, tag_list);
   if (t) {
     t->refcount += 1;
   }
@@ -61,6 +61,8 @@ void packet_fill(struct packet *p, unsigned int sec, unsigned int usec,
 
   check(size <= sizeof(p->data));
   memcpy(p->data, ptr, size);
+
+  p->size = size;
 }
 
 
@@ -100,6 +102,17 @@ struct packet *packet_ring_get(struct packet_ring *r) {
     p->tag = NULL;
     TAILQ_INSERT_TAIL(&r->avail_packets, p, _next);
   }
+  else {
+    TAILQ_REMOVE(&r->free_packets, p, _next);
+    p->tag = NULL;
+    TAILQ_INSERT_TAIL(&r->avail_packets, p, _next);
+  }
 
   return p;
+}
+
+void packet_ring_put(struct packet_ring *r, struct packet *p) {
+  TAILQ_REMOVE(&r->avail_packets, p, _next);
+  tag_put(p->tag);
+  TAILQ_INSERT_TAIL(&r->free_packets, p, _next);
 }
