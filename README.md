@@ -2,7 +2,7 @@
 
 Capture packets and create pcapng files.
 
-| **Coverity** | [![Coverity status](https://scan.coverity.com/projects/15505/badge.svg)](https://scan.coverity.com/projects/gteissier-rollingpcapng)|
+![Coverity status](https://scan.coverity.com/projects/15505/badge.svg)](https://scan.coverity.com/projects/gteissier-rollingpcapng)
 
 # Rationale
 
