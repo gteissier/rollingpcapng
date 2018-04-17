@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <sys/un.h>
+#include <pwd.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -36,6 +37,7 @@ static const char *interface = NULL;
 static int packet_ring_frames= 1024;
 static int packet_buffer_frames = 1024;
 static const char *ctl_path = "/tmp/rpcapng.ctl";
+static const char *user;
 
 struct rxring {
   /* initialized during startup */
@@ -231,12 +233,14 @@ static void ctl_process(int revents) {
 }
 
 static void usage(const char *arg0) {
-  fprintf(stderr, "usage: %s -i <interface> [-r rx_ring_size] [-R roll_ring_size] [-c ctl_path]\n"
+  fprintf(stderr, "usage: %s -i <interface> [-r rx_ring_size] [-R roll_ring_size]"
+    " [-c ctl_path] [-Z user]\n"
     "  -i <interface>: the network interface to capture from\n"
     "  -r rx_ring_size: the number of slots in the PF_PACKET rx ring used to pull packets from NIC\n"
     "     DUE TO IMPLEMENTATION, USE ONLY A POWER OF TWO\n"
     "  -R roll_ring_size: the number of slots in the network blackbox\n"
-    "  -c ctl_path: Unix path of control socket\n", arg0);
+    "  -c ctl_path: Unix path of control socket\n"
+    "  -Z user: run under user identity, once privileged ops are done\n", arg0);
 
   exit(1);
 }
@@ -246,10 +250,13 @@ int main(int argc, char **argv) {
   int c;
   struct sockaddr_un addr;
   struct pollfd fds[2];
+  struct passwd *passwd;
+  uid_t uid = 0;
+  gid_t gid = 0;
 
   pagesize = getpagesize();
 
-  while ((c = getopt(argc, argv, "i:c:r:R:h")) != -1) {
+  while ((c = getopt(argc, argv, "i:c:r:R:Z:h")) != -1) {
     switch (c) {
     case 'i':
       interface = optarg;
@@ -263,6 +270,9 @@ int main(int argc, char **argv) {
     case 'R':
       packet_buffer_frames = atoi(optarg);
       break;
+    case 'Z':
+      user = optarg;
+      break;
     case '?':
     case 'h':
       usage(argv[0]);
@@ -273,8 +283,30 @@ int main(int argc, char **argv) {
     usage(argv[0]);
   }
 
-  signal(SIGINT, on_sig);
+  if (user) {
+    passwd = getpwnam(user);
+    if (!passwd) {
+      fprintf(stderr, "user %s is not valid\n", user);
+      exit(1);
+    }
 
+    uid = passwd->pw_uid;
+    gid = passwd->pw_gid;
+  }
+
+
+  packet_ring_init(&pr, 1024);
+  rxring_init(&rx, "ens3");
+
+
+  if (user) {
+    ret = setgid(gid);
+    check(ret == 0);
+    ret = setuid(uid);
+    check(ret == 0);
+  }
+
+  signal(SIGINT, on_sig);
 
   memset(&addr, 0, sizeof(addr));
   addr.sun_family = AF_UNIX;
@@ -285,9 +317,6 @@ int main(int argc, char **argv) {
 
   ret = bind(ctl_fd, (struct sockaddr *) &addr, sizeof(addr));
   check(ret == 0);
-
-  packet_ring_init(&pr, 1024);
-  rxring_init(&rx, "ens3");
 
 
   while (!quit) {
