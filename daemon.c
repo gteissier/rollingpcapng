@@ -27,14 +27,8 @@
 
 #include "tagged-packet.h"
 #include "pcapng.h"
+#include "util.h"
 
-#define check(what)	do {				\
-  if (!(what)) {					\
-    fprintf(stderr, "%s:%d " #what " failed (%m)\n", __FILE__,  \
-      __LINE__);					\
-    exit(1);						\
-  }							\
-} while (0)
 
 
 static struct ev_loop *loop;
@@ -221,7 +215,6 @@ static void ctl_process(struct ev_loop *l, ev_io *w, int revents) {
     check(ret > 1);
 
     tag_append(&buffer[1]);
-    printf("append tag %s\n", &buffer[1]);
   }
   else if (buffer[0] == 'd') {
     check(ret > 1);
@@ -252,6 +245,7 @@ static void usage(const char *arg0) {
   fprintf(stderr, "usage: %s -i <interface> [-r rx_ring_size] [-R roll_ring_size] [-c ctl_path]\n"
     "  -i <interface>: the network interface to capture from\n"
     "  -r rx_ring_size: the number of slots in the PF_PACKET rx ring used to pull packets from NIC\n"
+    "     DUE TO IMPLEMENTATION, USE ONLY A POWER OF TWO\n"
     "  -R roll_ring_size: the number of slots in the network blackbox\n"
     "  -c ctl_path: Unix path of control socket\n", arg0);
 
@@ -267,7 +261,7 @@ int main(int argc, char **argv) {
   loop = EV_DEFAULT;
   pagesize = getpagesize();
 
-  while ((c = getopt(argc, argv, "i:c:r:R:")) != -1) {
+  while ((c = getopt(argc, argv, "i:c:r:R:h")) != -1) {
     switch (c) {
     case 'i':
       interface = optarg;
@@ -281,6 +275,9 @@ int main(int argc, char **argv) {
     case 'R':
       packet_buffer_frames = atoi(optarg);
       break;
+    case '?':
+    case 'h':
+      usage(argv[0]);
     }
   }
 

@@ -4,15 +4,7 @@
 #include <string.h>
 
 #include "tagged-packet.h"
-
-
-#define check(what)     do {                            \
-  if (!(what)) {                                        \
-    fprintf(stderr, "%s:%d " #what " failed (%m)\n", __FILE__,  \
-      __LINE__);                                        \
-    exit(1);                                            \
-  }                                                     \
-} while (0)
+#include "util.h"
 
 static struct tag_list tags = TAILQ_HEAD_INITIALIZER(tags);
 

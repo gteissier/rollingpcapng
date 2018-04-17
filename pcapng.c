@@ -6,14 +6,8 @@
 
 
 #include "pcapng.h"
+#include "util.h"
 
-#define check(what)     do {                            \
-  if (!(what)) {                                        \
-    fprintf(stderr, "%s:%d " #what " failed (%m)\n", __FILE__,  \
-      __LINE__);                                        \
-    exit(1);                                            \
-  }                                                     \
-} while (0)
 
 void pcapng_write_shblock(FILE *f) {
   int ret;
