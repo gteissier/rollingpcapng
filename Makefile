@@ -6,5 +6,5 @@ CFLAGS=-g -O0 -Wall -Werror \
 
 all: daemon.o tagged-packet.o pcapng.o \
   ctl.o
-	$(CC) -fpie -g -Wl,-z,relro,-z,now -o rpcapng daemon.o tagged-packet.o pcapng.o -lev
+	$(CC) -fpie -g -Wl,-z,relro,-z,now -o rpcapng daemon.o tagged-packet.o pcapng.o
 	$(CC) -fpie -g -Wl,-z,relro,-z,now -o rpcapngctl ctl.o

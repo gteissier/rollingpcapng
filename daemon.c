@@ -23,16 +23,14 @@
 #include <linux/if_packet.h>
 #include <linux/filter.h>
 
-#include <ev.h>
-
 #include "tagged-packet.h"
 #include "pcapng.h"
 #include "util.h"
 
 
 
-static struct ev_loop *loop;
 static int pagesize;
+volatile int quit = 0;
 
 static const char *interface = NULL;
 static int packet_ring_frames= 1024;
@@ -43,20 +41,18 @@ struct rxring {
   /* initialized during startup */
   int fd;
   void *ring;
-  ev_io ready;
 
   /* updated by kernel and by userspace */
   int offset;
 };
 static void rxring_init(struct rxring *r, const char *iface);
 static void rxring_fini(struct rxring *r);
-static void rxring_process(struct ev_loop *l, ev_io *io, int revents);
+static void rxring_process(struct rxring *r, int revents);
 
 static struct rxring rx;
 
 
 static int ctl_fd;
-static ev_io ctl_ready;
 
 static struct packet_ring pr;
 
@@ -147,11 +143,6 @@ static void rxring_init(struct rxring *r, const char *iface) {
   check(r->ring != MAP_FAILED);
 
   r->offset = 0;
-
-  ev_io_init(&r->ready, rxring_process, r->fd, EV_READ);
-  r->ready.data = r;
-  ev_io_start(loop, &r->ready);
-  r->ready.data = r;
 }
 
 static void rxring_fini(struct rxring *r) {
@@ -159,10 +150,9 @@ static void rxring_fini(struct rxring *r) {
   close(r->fd);
 }
 
-static void rxring_process(struct ev_loop *l, ev_io *io, int revents) {
+static void rxring_process(struct rxring *r, int revents) {
   struct tpacket_hdr *header;
   struct packet *p;
-  struct rxring *r = io->data;
 
   const void *bytes;
   size_t size;
@@ -189,12 +179,11 @@ static void rxring_process(struct ev_loop *l, ev_io *io, int revents) {
   }
 }
 
-
-static void sig_process(struct ev_loop *l, ev_signal *s, int revents) {
-  ev_break(loop, EVBREAK_ALL);
+static void on_sig(int signo) {
+  quit = 1;
 }
 
-static void ctl_process(struct ev_loop *l, ev_io *w, int revents) {
+static void ctl_process(int revents) {
   int ret;
   struct sockaddr_un addr;
   socklen_t addr_size = sizeof(addr);
@@ -254,11 +243,10 @@ static void usage(const char *arg0) {
 
 int main(int argc, char **argv) {
   int ret;
-  ev_signal signal_watcher;
   int c;
   struct sockaddr_un addr;
+  struct pollfd fds[2];
 
-  loop = EV_DEFAULT;
   pagesize = getpagesize();
 
   while ((c = getopt(argc, argv, "i:c:r:R:h")) != -1) {
@@ -285,8 +273,7 @@ int main(int argc, char **argv) {
     usage(argv[0]);
   }
 
-  ev_signal_init(&signal_watcher, sig_process, SIGINT);
-  ev_signal_start(loop, &signal_watcher);
+  signal(SIGINT, on_sig);
 
 
   memset(&addr, 0, sizeof(addr));
@@ -299,21 +286,32 @@ int main(int argc, char **argv) {
   ret = bind(ctl_fd, (struct sockaddr *) &addr, sizeof(addr));
   check(ret == 0);
 
-  ev_io_init(&ctl_ready, ctl_process, ctl_fd, EV_READ);
-  ev_io_start(loop, &ctl_ready);
-
-
   packet_ring_init(&pr, 1024);
   rxring_init(&rx, "ens3");
 
 
-  ev_run(loop, 0);
+  while (!quit) {
+    memset(fds, 0, sizeof(fds));
+
+    fds[0].fd = rx.fd;
+    fds[0].events = POLLIN;
+    fds[1].fd = ctl_fd;
+    fds[1].events = POLLIN;
+
+    ret = poll(fds, 2, 1);
+    if (ret > 0) {
+      if (fds[0].revents & POLLIN) {
+        rxring_process(&rx, fds[0].revents);
+      }
+      if (fds[1].revents & POLLIN) {
+        ctl_process(fds[1].revents);
+      }
+    }
+  }
 
 
   rxring_fini(&rx);
   packet_ring_fini(&pr);
-
-  ev_io_stop(loop, &ctl_ready);
 
   close(ctl_fd);
   unlink(ctl_path);
