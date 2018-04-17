@@ -1,11 +1,9 @@
-<a href="https://scan.coverity.com/projects/gteissier-rollingpcapng">
-  <img alt="Coverity Scan Build Status"
-       src="https://img.shields.io/coverity/scan/15505.svg"/>
-</a>
-
 # rollingpcapng
 
-Capture packets and create pcapng files
+Capture packets and create pcapng files.
+
+| --- | --- |
+| **Coverity** | [![Coverity status](https://scan.coverity.com/projects/15505/badge.svg)](https://scan.coverity.com/projects/gteissier-rollingpcapng)|
 
 # Rationale
 
