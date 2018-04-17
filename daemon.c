@@ -7,6 +7,12 @@
 #include <getopt.h>
 #include <sys/un.h>
 #include <pwd.h>
+#include <sys/prctl.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <linux/unistd.h>
+#include <linux/audit.h>
+#include <stddef.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -232,6 +238,60 @@ static void ctl_process(int revents) {
   sendto(ctl_fd, "ok\n", 3, 0, (const struct sockaddr *) &addr, addr_size);
 }
 
+#define syscall_arg(_n) (offsetof(struct seccomp_data, args[_n]))
+#define syscall_nr (offsetof(struct seccomp_data, nr))
+#define arch_nr (offsetof(struct seccomp_data, arch))
+
+#if defined(__i386__)
+# define REG_SYSCALL	REG_EAX
+# define ARCH_NR	AUDIT_ARCH_I386
+#elif defined(__x86_64__)
+# define REG_SYSCALL	REG_RAX
+# define ARCH_NR	AUDIT_ARCH_X86_64
+#else
+# warning "Platform does not support seccomp filter yet"
+# define REG_SYSCALL	0
+# define ARCH_NR	0
+#endif
+
+#define VALIDATE_ARCHITECTURE \
+	BPF_STMT(BPF_LD+BPF_W+BPF_ABS, arch_nr), \
+	BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, ARCH_NR, 1, 0), \
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_KILL)
+
+#define EXAMINE_SYSCALL \
+	BPF_STMT(BPF_LD+BPF_W+BPF_ABS, syscall_nr)
+
+#define ALLOW_SYSCALL(name) \
+	BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_##name, 0, 1), \
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW)
+
+#define KILL_PROCESS \
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_KILL)
+
+static __attribute__((unused)) void filter_syscalls() {
+  int ret;
+
+  static struct sock_filter filter[] = {
+#include "rpcapng.seccomp"
+  };
+
+  static struct sock_fprog prog = {
+    .len = sizeof(filter)/sizeof(filter[0]),
+    .filter = filter,
+  };
+
+  ret = prctl(PR_SET_DUMPABLE, 0);
+  check(ret == 0);
+
+  ret = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0, 0);
+  check(ret == 0);
+
+  ret = prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog);
+  check(ret == 0);
+}
+
+
 static void usage(const char *arg0) {
   fprintf(stderr, "usage: %s -i <interface> [-r rx_ring_size] [-R roll_ring_size]"
     " [-c ctl_path] [-Z user]\n"
@@ -306,6 +366,9 @@ int main(int argc, char **argv) {
     check(ret == 0);
   }
 
+
+  filter_syscalls();
+
   signal(SIGINT, on_sig);
 
   memset(&addr, 0, sizeof(addr));
@@ -327,7 +390,7 @@ int main(int argc, char **argv) {
     fds[1].fd = ctl_fd;
     fds[1].events = POLLIN;
 
-    ret = poll(fds, 2, 1);
+    ret = poll(fds, 2, 100);
     if (ret > 0) {
       if (fds[0].revents & POLLIN) {
         rxring_process(&rx, fds[0].revents);

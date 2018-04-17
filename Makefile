@@ -4,7 +4,8 @@ CFLAGS=-g -O0 -Wall -Werror \
   -D_FORTIFY_SOURCE=2 \
   -fstack-protector-strong
 
-all: daemon.o tagged-packet.o pcapng.o \
+all: daemon.o rpcapng.seccomp tagged-packet.o pcapng.o \
   ctl.o
 	$(CC) -fpie -g -Wl,-z,relro,-z,now -o rpcapng daemon.o tagged-packet.o pcapng.o
 	$(CC) -fpie -g -Wl,-z,relro,-z,now -o rpcapngctl ctl.o
+	rm -f daemon.o
