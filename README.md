@@ -24,7 +24,13 @@ In details, this gives:
 
 At the end, you will have a serie of pcapng dumps, containing tagged frames.
 
-## `rpcapng` help
+## Typical use of `rpcapng`
+
+At least, you shall give the interface on which to capture, and the user under which capture will run:
+
+```
+./rpcapng -i ens3 -Z rolling
+```
 
 ```
 # ./rpcapng -h
@@ -38,19 +44,6 @@ usage: ./rpcapng -i <interface> [-r rx_ring_size] [-R roll_ring_size] [-c ctl_pa
   -c ctl_path: Unix path of control socket
      defaults to /tmp/rpcapng.ctl
   -Z user: run under user identity, once privileged ops are done
-```
-
-## `rpcapngctl` help
-
-```
-# ./rpcapngctl -h
-usage: ./rpcapngctl [-c ctl_path] mode [arg]
-  -c ctl_path: Unix path of control socket
-  mode can be:
-  tag <tag>: set the comment for newly captured packets
-  clear: reset the packet ring buffer
-  dump <file>: dump the packet ring buffer to a file
-  arg is limited to 254 bytes
 ```
 
 # Behind the scenes
@@ -71,10 +64,15 @@ The ring is implemented with a doubly-linked list, through the use of BSD macros
 
 It happends at two places:
 
-* compiling: using ```-fPIE -fpie \
+* compiling: using
+
+```
+-fPIE -fpie \
   -Wformat -Wformat-security -Werror=format-security \
   -D_FORTIFY_SOURCE=2 \
-  -fstack-protector-strong`
+  -fstack-protector-strong
+```
+
 * linking: using `$(CC) -fpie -Wl,-z,relro,-z,now,-z,defs`
 
 ## Privilege drop
@@ -90,4 +88,4 @@ As an additional layer of insurance, privileges are dropped, and we request kern
 
 ## System calls filtering
 
-When starting, the daemon reduces the set of allowed system calls to the strict minimum. The set of allowed system calls is defined in `rpcapng.seccomp√`.
+When starting, the daemon reduces the set of allowed system calls to the strict minimum. The set of allowed system calls is defined in `rpcapng.seccomp`.
