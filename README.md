@@ -11,12 +11,16 @@ A network blackbox, always on, with two cool features:
 
 # Usage
 
+This tool has been developped when you need to start a lot of tests sequentially, and you need to be sure to collect packets when one of these tests has failed e.g. when performing fuzzing tests :)
+
+In details, this gives:
+
 1. Measure: how many packets will be kept ?
 2. Launch `rpcapng`: on which interface ?
-3. Mind your business
-4. Tag newly captured packets using `rpcapngctl tag <mytag>`
-5. When needed, generate a dump of packets: `rpcapngctl dump <pcapng name>`
-6. Go to step 3
+3. Mind your business: start your favorite fuzzing tool
+4. When starting a new test: tag newly captured packets using `rpcapngctl tag <mytag>`
+5. When a test fails: generate a dump of packets using `rpcapngctl dump <pcapng name>`
+6. Go to step 4
 
 At the end, you will have a serie of pcapng dumps, containing tagged frames.
 
@@ -50,14 +54,13 @@ usage: ./rpcapngctl [-c ctl_path] mode [arg]
 
 ## Packet capture
 
-It uses what `libpcap` uses internally: a `PF\_PACKET` socket, a memory mapped ring of packets. Additionally, a BPF code is loaded to filter out ssh trafic, given by the filter `not port 22`. Once packets are captured, they copied from the `PF\_PACKET` ring to the blackbox.
+It uses what `libpcap` uses internally: a `PF\_PACKET` socket, a memory mapped ring of packets. Additionally, a BPF code is loaded to filter out ssh trafic, given by the filter `not port 22`. Once packets are captured, they are copied from the `PF\_PACKET` ring to the blackbox.
 
 ## Always-on blackbox
 
-The ring is implemented with a doubly-linked list, through the use of BSD macros of the `TAILQ_*` family.
+The ring is implemented with a doubly-linked list, through the use of BSD macros of the `TAILQ_*` family. Once filled, oldest items will be replaced by newest ones.
 
 ## Pcap-ng allows to tag packet
-
 
 # Security features
 
