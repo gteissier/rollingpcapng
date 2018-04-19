@@ -32,8 +32,11 @@ usage: ./rpcapng -i <interface> [-r rx_ring_size] [-R roll_ring_size] [-c ctl_pa
   -i <interface>: the network interface to capture from
   -r rx_ring_size: the number of slots in the PF_PACKET rx ring used to pull packets from NIC
      DUE TO IMPLEMENTATION, USE ONLY A POWER OF TWO
+     defaults to 1024
   -R roll_ring_size: the number of slots in the network blackbox
+     defaults to 1024
   -c ctl_path: Unix path of control socket
+     defaults to /tmp/rpcapng.ctl
   -Z user: run under user identity, once privileged ops are done
 ```
 

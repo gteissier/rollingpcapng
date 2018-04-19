@@ -43,7 +43,7 @@ static const char *interface = NULL;
 static int packet_ring_frames= 1024;
 static int packet_buffer_frames = 1024;
 static const char *ctl_path = "/tmp/rpcapng.ctl";
-static const char *user;
+static const char *user = NULL;
 
 struct rxring {
   /* initialized during startup */
@@ -298,8 +298,11 @@ static void usage(const char *arg0) {
     "  -i <interface>: the network interface to capture from\n"
     "  -r rx_ring_size: the number of slots in the PF_PACKET rx ring used to pull packets from NIC\n"
     "     DUE TO IMPLEMENTATION, USE ONLY A POWER OF TWO\n"
+    "     defaults to 1024\n"
     "  -R roll_ring_size: the number of slots in the network blackbox\n"
+    "     defaults to 1024\n"
     "  -c ctl_path: Unix path of control socket\n"
+    "     defaults to /tmp/rpcapng.ctl\n"
     "  -Z user: run under user identity, once privileged ops are done\n", arg0);
 
   exit(1);
