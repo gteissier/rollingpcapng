@@ -90,7 +90,10 @@ void pcapng_write_epblock(FILE *f, const struct packet *p) {
   ret = fwrite(&u32, sizeof(u32), 1, fbody);
   check(ret == 1);
 
-  u64 = 1000000*p->sec + p->usec;
+  u64 = p->sec;
+  u64 *= 1000000;
+  u64 += p->usec;
+
   u32 = u64>>32;
   ret = fwrite(&u32, sizeof(u32), 1, fbody);
   check(ret == 1);
