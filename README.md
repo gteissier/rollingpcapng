@@ -7,11 +7,11 @@
 A network blackbox, always on, with two cool features:
 
 * you can generate a snapshot of the rolling buffer of packets
-* you can tag packets, specifying a new tag at will, that will tag newly captured packets
+* you can tag packets, specifying a new tag at will. This tag will be visible in the snapshot.
 
 # Usage
 
-This tool has been developped when you need to start a lot of tests sequentially, and you need to be sure to collect packets when one of these tests has failed e.g. when performing fuzzing tests :)
+This tool has been developped to help when you need to start a lot of tests sequentially, and you need to be sure to collect packets when one of these tests has failed e.g. when performing fuzzing tests :)
 
 In details, this gives:
 
@@ -22,7 +22,7 @@ In details, this gives:
 5. When a test fails: generate a dump of packets using `rpcapngctl dump <pcapng name>`
 6. Go to step 4
 
-At the end, you will have a serie of pcapng dumps, containing tagged frames.
+At the end, you will have a set of pcapng dumps, containing tagged frames.
 
 ## Typical use of `rpcapng`
 
@@ -31,6 +31,13 @@ At least, you shall give the interface on which to capture, and the user under w
 ```
 ./rpcapng -i ens3 -Z rolling
 ```
+
+You may tune other parameters, such as:
+
+* the capacity of the `PF_PACKET` ring buffer, using `-r` option. Note that this option shall be a power of two
+* the capacity of the rolling ring buffer, using `-R` option.
+
+The full help is given below:
 
 ```
 # ./rpcapng -h
@@ -50,21 +57,21 @@ usage: ./rpcapng -i <interface> [-r rx_ring_size] [-R roll_ring_size] [-c ctl_pa
 
 ## Packet capture
 
-It uses what `libpcap` uses internally: a `PF\_PACKET` socket, a memory mapped ring of packets. Additionally, a BPF code is loaded to filter out ssh trafic, given by the filter `not port 22`. Once packets are captured, they are copied from the `PF\_PACKET` ring to the blackbox.
+It uses what `libpcap` uses internally: a `PF_PACKET` socket, and a memory mapped ring of packets. Additionally, a BPF code is loaded to filter out ssh trafic, given by the filter `not port 22`, translated to BPF bytecode. Once packets are captured, they are copied from the `PF_PACKET` ring to the blackbox. While we could have used only one ring buffer to store the packets, the problem is that the kernel will not reuse a busy slot, but rather drop newly captured frames. The behaviour is not what we want, hence we have implemented a second ring buffer to support it.
 
 ## Always-on blackbox
 
-The ring is implemented with a doubly-linked list, through the use of BSD macros of the `TAILQ_*` family. Once filled, oldest items will be replaced by newest ones.
+The second ring buffer is implemented with a doubly-linked list, through the use of BSD macros of the `TAILQ_*` family. Once filled, oldest items will be replaced by newest ones. The associated memory is allocated at startup and reused.
 
 ## Pcap-ng allows to tag packet
+
+Packets stored in the ring buffer are associated with the current tag at the time of capture. At a given time, the ring buffer contains packets which are tagged with different values. Reference counting is used to track use of tags, and free the associated memory when packets tagged with this value have been overwritten by more recent entries.
 
 # Security features
 
 ## Hardened toolchain
 
-It happends at two places:
-
-* compiling: using
+* compile time: using
 
 ```
 -fPIE -fpie \
@@ -73,18 +80,18 @@ It happends at two places:
   -fstack-protector-strong
 ```
 
-* linking: using `$(CC) -fpie -Wl,-z,relro,-z,now,-z,defs`
+* link time: using `$(CC) -fpie -Wl,-z,relro,-z,now,-z,defs`
 
 ## Privilege drop
 
-Only a few operations require to have `CAP\_NET\_RAW` capabilities:
+Only a few operations require to have `CAP_NET_RAW` capabilities:
 
-* opening a `PF\_PACKET` socket
+* opening a `PF_PACKET` socket
 * changing the running UID to another unprivileged UID
 
 Privileges are dropped after these steps are performed.
 
-As an additional layer of insurance, privileges are dropped, and we request kernel to never grant any privileges to our process or one of its descendants.
+As an additional layer of insurance, we request kernel to never grant any privileges to our process or one of its descendants.
 
 ## System calls filtering
 
