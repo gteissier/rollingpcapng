@@ -74,7 +74,7 @@ static int get_ifindex(const char *iface) {
   check(sd != -1);
 
   memset(&ifr, 0, sizeof(ifr));
-  strncpy(ifr.ifr_name, iface, IFNAMSIZ);
+  strncpy(ifr.ifr_name, iface, IFNAMSIZ-1);
 
   ret = ioctl(sd, SIOCGIFINDEX, &ifr);
   check(ret == 0);
