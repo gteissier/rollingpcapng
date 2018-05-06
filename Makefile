@@ -11,3 +11,7 @@ all: daemon.o rpcapng.seccomp tagged-packet.o pcapng.o \
 	$(CC) $(LDFLAGS) -o rpcapng daemon.o tagged-packet.o pcapng.o
 	$(CC) $(LDFLAGS) -o rpcapngctl ctl.o
 	rm -f daemon.o
+
+.PHONY: clean
+clean:
+	rm -f *.o rpcapng rpcapngctl
