@@ -96,3 +96,5 @@ As an additional layer of insurance, we request kernel to never grant any privil
 ## System calls filtering
 
 When starting, the daemon reduces the set of allowed system calls to the strict minimum. The set of allowed system calls is defined in `rpcapng.seccomp`.
+
+Please note that the system call list currently targets x86-64 ABI, and glibc evolution may bring new system calls under the seccomp filter. If a new system call is not whitelisted, `rpcapng` will be killed with `Bad system call`. Take a look at `dmesg` output will give you the culprit, namely its system call number, which then can be added to `rpcapng.seccomp` before recompiling the binary.
