@@ -359,7 +359,7 @@ int main(int argc, char **argv) {
 
 
   packet_ring_init(&pr, 1024);
-  rxring_init(&rx, "ens3");
+  rxring_init(&rx, interface);
 
 
   if (user) {
