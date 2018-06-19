@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-g -O0 -Wall -Werror \
+CFLAGS=-g -O3 -Wall -Werror \
   -fPIE -fpie \
   -Wformat -Wformat-security -Werror=format-security \
   -D_FORTIFY_SOURCE=2 \
